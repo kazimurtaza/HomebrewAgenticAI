@@ -41,14 +41,14 @@ Follow these steps to get the project up and running on your local machine.
 
 
 ## Code Setup
-1. Clone the Repository 
+1. **Clone the Repository**
 First, set up the recommended project structure if you haven't already:
 ```
 git clone https://github.com/kazimurtaza/HomebrewAgenticAI.git
 ```
 
 
-2. Set up Environment Variables
+2. **Set up Environment Variables**
 
 Create a .env file in the root directory (rag_project/) and populate it with your configuration:
 
@@ -66,7 +66,7 @@ Create a .env file in the root directory (rag_project/) and populate it with you
     - Application Configuration
         - MATCH_COUNT=5 # Number of relevant documents to retrieve
 
-3. Install Dependencies
+3. **Install Dependencies**
 
 Create a requirements.txt file in the root directory (rag_project/) with the following content:
 
@@ -86,7 +86,7 @@ source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 pip install -r requirements.txt
 ```
 
-4. Supabase Database Setup 
+4. **Supabase Database Setup**
 
 You need a site_pages table and a match_site_pages function in your Supabase database.
 
@@ -167,13 +167,13 @@ with check (auth.role() = 'authenticated' or auth.role() = 'service_role');
 ```
 
 # 🚀 Usage
-1. Run the Crawler (Data Ingestion): First, populate your Supabase database by running the crawler. This will fetch documentation from https://xyz.com/sitemap.xml, process it, and store it.
+1. **Run the Crawler (Data Ingestion):** First, populate your Supabase database by running the crawler. This will fetch documentation from https://xyz.com/sitemap.xml, process it, and store it.
 ```
 python src/crawl.py
 ```
 This process might take some time depending on the number of URLs and your Ollama setup.
 
-2. Run the RAG Agent: Once the database is populated, you can run the main RAG agent to answer questions.
+2. **Run the RAG Agent:** Once the database is populated, you can run the main RAG agent to answer questions.
 ```
 python src/main.py
 ```
@@ -185,11 +185,11 @@ This project provides a strong foundation for an agentic RAG. To further enhance
 
 ## MCP servers can:
 
-- Standardize External Interactions: Abstract away direct API calls (like to Supabase or Ollama) behind a consistent MCP interface.
+- **Standardize External Interactions:** Abstract away direct API calls (like to Supabase or Ollama) behind a consistent MCP interface.
 
-- Add New Tools: Easily integrate new functionalities (e.g., advanced web search, specific APIs, specialized data processing) as MCP tools that your agent can discover and use.
+- **Add New Tools:** Easily integrate new functionalities (e.g., advanced web search, specific APIs, specialized data processing) as MCP tools that your agent can discover and use.
 
-- Improve Agentic Behavior: By providing a more robust and modular tool-calling mechanism, MCP can help the agent make more reliable decisions about when and how to use external resources.
+- **Improve Agentic Behavior:** By providing a more robust and modular tool-calling mechanism, MCP can help the agent make more reliable decisions about when and how to use external resources.
 
 - Explore the Awesome MCP Servers repository for a curated list of available MCP servers that you can integrate into your project. For example, you could replace direct Supabase calls with a supabase-mcp-server or introduce exa-mcp-server for powerful web search capabilities.
 
