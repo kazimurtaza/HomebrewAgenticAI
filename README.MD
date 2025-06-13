@@ -2,16 +2,16 @@
 This project implements a "Poor Man's Agentic RAG (Retrieval Augmented Generation)" system in Python, inspired by the concepts discussed in the blog "[Building a 'Poor Man's Agentic RAG' with Python: A Step-by-Step Guide](https://kazimurtaza.medium.com/building-a-poor-mans-agentic-rag-with-python-a-step-by-step-guide-3284aa90297e)". It combines a web crawler for data ingestion, a local Large Language Model (LLM) for summarization and embeddings, and a Supabase instance for vector storage and retrieval. The system also includes an agentic loop with a self-correction mechanism to improve the quality of generated answers by ensuring proper tool usage.
 
 # ✨ Features
-- Documentation Crawling: Asynchronously crawls specified documentation websites, extracts content, and processes it into structured chunks.
-- Intelligent Chunking: Splits text into manageable chunks, intelligently respecting code blocks, paragraphs, and sentences to maintain context.
-- LLM-powered Summarization & Title Extraction: Uses a local Ollama model to generate concise summaries and descriptive titles for each document chunk.
-- Vector Embeddings: Generates embeddings for each chunk using a local Ollama embedding model, enabling semantic search.
-- Supabase Integration: Stores processed document chunks, along with their metadata and embeddings, in a Supabase database for efficient retrieval.
-- Agentic RAG Pipeline:
-    - Tool Usage: The main agent (Documentation AI Expert) is equipped with tools to retrieve relevant documentation, list available documentation pages, and fetch full page content from Supabase.
-    - Dynamic Prompting: Adapts its system prompt based on previous attempts, encouraging the agent to use all required tools in a specified order.
-    - Self-Correction/Validation: Employs a separate validation agent (also a local LLM) to check if the generated answer accurately addresses the original query, leading to iterative refinement.
-    - Custom Logging: Provides enhanced logging with colored output and emojis for better debuggability.
+- **Documentation Crawling:** Asynchronously crawls specified documentation websites, extracts content, and processes it into structured chunks.
+- **Intelligent Chunking:** Splits text into manageable chunks, intelligently respecting code blocks, paragraphs, and sentences to maintain context.
+- **LLM-powered Summarization & Title Extraction:** Uses a local Ollama model to generate concise summaries and descriptive titles for each document chunk.
+- **Vector Embeddings:** Generates embeddings for each chunk using a local Ollama embedding model, enabling semantic search.
+- **Supabase Integration:** Stores processed document chunks, along with their metadata and embeddings, in a Supabase database for efficient retrieval.
+- **Agentic RAG Pipeline:**
+    - **Tool Usage:** The main agent (Documentation AI Expert) is equipped with tools to retrieve relevant documentation, list available documentation pages, and fetch full page content from Supabase.
+    - **Dynamic Prompting:** Adapts its system prompt based on previous attempts, encouraging the agent to use all required tools in a specified order.
+    - **Self-Correction/Validation:** Employs a separate validation agent (also a local LLM) to check if the generated answer accurately addresses the original query, leading to iterative refinement.
+    - **Custom Logging:** Provides enhanced logging with colored output and emojis for better debuggability.
 
 # 📁 Project Structure
 ```
