@@ -44,7 +44,7 @@ Follow these steps to get the project up and running on your local machine.
 1. Clone the Repository 
 First, set up the recommended project structure if you haven't already:
 ```
-git clone https://
+git clone https://github.com/kazimurtaza/HomebrewAgenticAI.git
 ```
 
 
