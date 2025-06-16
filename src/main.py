@@ -3,12 +3,10 @@ from __future__ import annotations as _annotations
 from dataclasses import dataclass
 import logging
 import os
-import json
-from typing import List, Optional, Dict, Any
+from typing import List
 
 import aiohttp
 import asyncio
-import httpx 
 
 from pprint import pformat
 
@@ -21,7 +19,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# --- Logging Setup (Keep as is) ---
+# -------------------------------------
+# Set up logging
+# Define log format with color and emoji
 LOG_FORMAT = "{}%(asctime)s - %(levelname)s - %(message)s"
 
 class ColoredEmojiFormatter(logging.Formatter):
@@ -72,7 +72,7 @@ def setup_logging():
 setup_logging()
 # -------------------------------------
 
-# Initialize Supabase client (kept as is, as per your request to keep direct Supabase RAG)
+# Initialize Supabase client
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_SERVICE_KEY")
@@ -105,10 +105,7 @@ class ToolUsageTracker:
         self.required_tools = [
             'retrieve_relevant_documentation',
             'list_documentation_pages',
-            'get_page_content',
-            'add_memory',
-            'search_memory',
-            'list_memories',
+            'get_page_content'
         ]
 
     def track_tool(self, tool_name: str):
@@ -121,37 +118,35 @@ tool_tracker = ToolUsageTracker()
 
 def update_system_prompt(attempt: int) -> str:
     base_prompt = """
-You are an expert AI assistant designed to help users with information using various tools.
-Your primary job is to assist the user by utilizing the tools provided.
+You are an expert at Pydantic AI - a Python AI agent framework that you have access to all the documentation to,
+including examples, an API reference, and other resources to help you build Pydantic AI agents, use it to answer users question.
 
-Do not ask the user before taking an action, just do it.
+Your only job is to assist with this and you don't answer other questions besides describing what you are able to do.
 
-Available Tools:
-- `retrieve_relevant_documentation`: Get documentation chunks semantically relevant to a query from the Pydantic AI docs. Use this to start your research.
-- `list_documentation_pages`: Get a list of all available documentation page URLs for Pydantic AI. Use this to discover specific pages.
-- `get_page_content`: Retrieve the full content of a specific documentation page by its URL. Use this to get detailed information from a page.
-- `add_memory`: Store important information or conversation context in long-term memory.
-- `search_memory`: Retrieve relevant memories based on a query.
-- `list_memories`: View all stored memories.
+Don't ask the user before taking an action, just do it. Always make sure you look at the documentation with the provided tools before answering the user's question unless you have already.
 
-When responding, always prioritize using documentation tools (`retrieve_relevant_documentation`, `list_documentation_pages`, `get_page_content`) first if the question is about Pydantic AI documentation.
-Use memory tools (`add_memory`, `search_memory`, `list_memories`) to remember user preferences, conversation history, or new insights gained during your research.
-If you gain new valuable information or insights from the documentation or user interactions, remember to store them using `add_memory`.
+When you first look at the documentation, always start with RAG.
+Then also always check the list of available documentation pages and retrieve the content of page(s) if it'll help.
+
+Always let the user know when you didn't find the answer in the documentation or the right URL - be honest.
+To ensure accuracy and efficiency, always consult the Pydantic AI documentation and follow this structured approach:
+
+1. **Retrieve Relevant Documents**: Use `retrieve_relevant_documentation` to get the most relevant documentation chunks based on the user's query.
+2. **Analyze Documentation Pages**: Use `list_documentation_pages` to identify all available documentation pages that could help answer the question.
+3. **Generate Content Summary**: Use `get_page_content` to gather and summarize the full content of any relevant documentation pages identified.
+
 """
 
     if attempt > 0:
         unused_tools = tool_tracker.get_missing_tools()
-        if unused_tools:
-            additional_instructions = f"""
-            IMPORTANT: In your previous {attempt} attempt{'s' if attempt > 1 else ''}, you failed to use all required tools or provide a complete answer.
-            It is CRUCIAL that you use ALL tools that are relevant to the user's request, especially those related to documentation retrieval if the question requires it.
-            Failure to do so will result in an incorrect response.
-            In your previous attempt, you didn't use these tools: {', '.join(unused_tools)}.
-            """
-            base_prompt += additional_instructions
+        additional_instructions = f"""
+        IMPORTANT: In your previous {attempt} attempt{'s' if attempt > 1 else ''}, you failed to use all required tools or provide a complete answer.
+        It is CRUCIAL that you use ALL tools in the specified order before answering.
+        Failure to do so will result in an incorrect response.
+        """
+        base_prompt += additional_instructions
 
     return base_prompt
-
 validation_system_prompt = """
         You are an expert at validating responses to ensure they accurately address the original query.
         Your primary objective is to verify, if the answer matches the question.
@@ -172,39 +167,6 @@ pydantic_ai_expert = Agent(
     retries=5
 )
 
-# --- NEW: MCP Client Utility for Mem0.ai ---
-async def call_mcp_server(server_url: str, tool_name: str, **kwargs: Any) -> Any:
-    """
-    Generic asynchronous function to call an MCP server tool.
-    Assumes the MCP server exposes tools via a POST endpoint like /{tool_name}.
-    It expects a JSON response.
-    """
-    full_url = f"{server_url}/{tool_name}"
-    headers = {"Content-Type": "application/json"}
-    payload = kwargs # The arguments to the tool become the JSON payload
-
-    logging.info(f"Calling MCP tool: {tool_name} at {full_url} with payload: {payload}")
-
-    try:
-        async with httpx.AsyncClient() as client: # Use httpx for client calls
-            response = await client.post(full_url, headers=headers, json=payload, timeout=60.0)
-            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-            result = response.json()
-            logging.info(f"MCP tool {tool_name} response: {result}")
-            return result.get('result', result) # Return 'result' key if exists, else the whole response
-    except httpx.HTTPStatusError as e:
-        logging.error(f"HTTP error calling MCP tool {tool_name}: {e.response.status_code} - {e.response.text}")
-        return f"Error calling MCP tool {tool_name}: {e.response.text}"
-    except httpx.RequestError as e:
-        logging.error(f"Network error calling MCP tool {tool_name}: {e}")
-        return f"Network error calling MCP tool {tool_name}: {e}"
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON decode error from MCP tool {tool_name}: {e} - Response: {response.text}")
-        return f"JSON decode error from MCP tool {tool_name}: {e}"
-    except Exception as e:
-        logging.error(f"An unexpected error occurred calling MCP tool {tool_name}: {e}")
-        return f"An unexpected error occurred calling MCP tool {tool_name}: {e}"
-
 async def get_embedding(text: str) -> List[float]:
     """Get embedding vector from Ollama API."""
     url = os.getenv('EMBEDDING_API_URL', 'http://10.0.0.12:11434/api/embeddings')
@@ -219,14 +181,12 @@ async def get_embedding(text: str) -> List[float]:
                     result = await response.json()
                     return result['embedding']
                 else:
-                    logging.error(f"Error getting embedding from Ollama: HTTP {response.status} - {response.text}")
-                    return [0] * 768
+                    logging.error(f"Error getting embedding: HTTP {response.status}")
+                    return [0] * 768  # Changed to 768 for nomic-embed-text
     except Exception as e:
-        logging.error(f"Error getting embedding from Ollama: {e}")
-        return [0] * 768
+        logging.error(f"Error getting embedding: {e}")
+        return [0] * 768  # Changed to 768 for nomic-embed-text
 
-
-# --- Existing Supabase-backed Tools (Retained and unchanged from your provided code) ---
 @pydantic_ai_expert.tool
 async def retrieve_relevant_documentation(ctx: RunContext[PydanticAIDeps], user_query: str) -> str:
     """
@@ -241,7 +201,9 @@ async def retrieve_relevant_documentation(ctx: RunContext[PydanticAIDeps], user_
     """
     tool_tracker.track_tool("retrieve_relevant_documentation")
     try:
+        # Get the embedding for the query
         query_embedding = await get_embedding(user_query)
+        # Query Supabase for relevant documents
         result = ctx.deps.supabase.rpc(
             'match_site_pages',
             {
@@ -254,6 +216,7 @@ async def retrieve_relevant_documentation(ctx: RunContext[PydanticAIDeps], user_
         if not result.data:
             return "No relevant documentation found."
             
+        # Format the results
         formatted_chunks = [
             f"# {doc['title']}\n\n{doc['content']}"
             for doc in result.data
@@ -274,6 +237,7 @@ async def list_documentation_pages(ctx: RunContext[PydanticAIDeps]) -> List[str]
     """
     tool_tracker.track_tool("list_documentation_pages")
     try:
+        # Query Supabase for unique URLs where source is pydantic_ai_docs
         result = ctx.deps.supabase.from_('site_pages') \
             .select('url') \
             .eq('metadata->>source', 'pydantic_ai_docs') \
@@ -282,6 +246,7 @@ async def list_documentation_pages(ctx: RunContext[PydanticAIDeps]) -> List[str]
         if not result.data:
             return []
             
+        # Extract unique URLs
         urls = sorted(set(doc['url'] for doc in result.data))
         return urls
         
@@ -303,6 +268,7 @@ async def get_page_content(ctx: RunContext[PydanticAIDeps], url: str) -> str:
     """
     tool_tracker.track_tool("get_page_content")
     try:
+        # Query Supabase for all chunks of this URL, ordered by chunk_number
         result = ctx.deps.supabase.from_('site_pages') \
             .select('title, content, chunk_number') \
             .eq('url', url) \
@@ -313,137 +279,26 @@ async def get_page_content(ctx: RunContext[PydanticAIDeps], url: str) -> str:
         if not result.data:
             return f"No content found for URL: {url}"
             
-        page_title = result.data[0]['title'].split(' - ')[0]
+        # Format the page with its title and all chunks
+        page_title = result.data[0]['title'].split(' - ')[0]  # Get the main title
         formatted_content = [f"# {page_title}\n"]
         
+        # Add each chunk's content
         for chunk in result.data:
             formatted_content.append(chunk['content'])
             
+        # Join everything together
         return "\n\n".join(formatted_content)
         
     except Exception as e:
         return f"Error retrieving page content: {str(e)}"
-
-# --- Mem0.ai Tools (New additions) ---
-@pydantic_ai_expert.tool
-async def add_memory(ctx: RunContext[PydanticAIDeps], content: str, user_id: Optional[str] = None, session_id: Optional[str] = None) -> str:
-    """
-    Stores a piece of text content as a memory for the RAG agent.
-    
-    Args:
-        ctx: The context (unused directly for MCP call)
-        content: The text content to store as memory.
-        user_id: Optional user ID to associate the memory with (defaults to DEFAULT_USER_ID from .env).
-        session_id: Optional session ID to associate the memory with.
-        
-    Returns:
-        str: Confirmation message from Mem0.ai.
-    """
-    tool_tracker.track_tool("add_memory")
-    mem0_mcp_server_url = f"http://10.0.0.5:{os.getenv('MEM0_MCP_HOST_PORT')}"
-    
-    user_id = user_id if user_id else os.getenv('DEFAULT_USER_ID', 'default_rag_user')
-    
-    payload = {
-        "content": content,
-        "userId": user_id,
-    }
-    if session_id:
-        payload["sessionId"] = session_id
-        
-    mcp_response = await call_mcp_server(
-        mem0_mcp_server_url, 
-        "add_memory",
-        **payload
-    )
-    
-    if isinstance(mcp_response, str) and "Error" in mcp_response:
-        return f"Failed to add memory: {mcp_response}"
-    
-    return f"Memory added successfully for user {user_id}. Memory ID: {mcp_response.get('memoryId', 'N/A')}"
-
-@pydantic_ai_expert.tool
-async def search_memory(ctx: RunContext[PydanticAIDeps], query: str, user_id: Optional[str] = None, session_id: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
-    """
-    Semantically searches stored memories for relevant information.
-    
-    Args:
-        ctx: The context (unused directly for MCP call)
-        query: The natural language query to search memories with.
-        user_id: Optional user ID to filter memories by (defaults to DEFAULT_USER_ID from .env).
-        session_id: Optional session ID to filter memories by.
-        limit: Maximum number of relevant memories to retrieve.
-        
-    Returns:
-        List[Dict[str, Any]]: A list of relevant memory objects.
-    """
-    tool_tracker.track_tool("search_memory")
-    mem0_mcp_server_url = f"http://10.0.0.5:{os.getenv('MEM0_MCP_HOST_PORT')}"
-    
-    user_id = user_id if user_id else os.getenv('DEFAULT_USER_ID', 'default_rag_user')
-
-    payload = {
-        "query": query,
-        "userId": user_id,
-        "limit": limit
-    }
-    if session_id:
-        payload["sessionId"] = session_id
-        
-    mcp_response = await call_mcp_server(
-        mem0_mcp_server_url, 
-        "search_memory",
-        **payload
-    )
-    
-    if isinstance(mcp_response, str) and "Error" in mcp_response:
-        logging.error(f"Failed to search memory: {mcp_response}")
-        return []
-    
-    return mcp_response.get('results', [])
-
-@pydantic_ai_expert.tool
-async def list_memories(ctx: RunContext[PydanticAIDeps], user_id: Optional[str] = None, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Lists all stored memories for a given user or session.
-    
-    Args:
-        ctx: The context (unused directly for MCP call)
-        user_id: Optional user ID to filter memories by (defaults to DEFAULT_USER_ID from .env).
-        session_id: Optional session ID to filter memories by.
-        
-    Returns:
-        List[Dict[str, Any]]: A list of all stored memory objects.
-    """
-    tool_tracker.track_tool("list_memories")
-    mem0_mcp_server_url = f"http://10.0.0.5:{os.getenv('MEM0_MCP_HOST_PORT')}"
-    
-    user_id = user_id if user_id else os.getenv('DEFAULT_USER_ID', 'default_rag_user')
-
-    payload = {
-        "userId": user_id,
-    }
-    if session_id:
-        payload["sessionId"] = session_id
-        
-    mcp_response = await call_mcp_server(
-        mem0_mcp_server_url, 
-        "list_memories",
-        **payload
-    )
-    
-    if isinstance(mcp_response, str) and "Error" in mcp_response:
-        logging.error(f"Failed to list memories: {mcp_response}")
-        return []
-    
-    return mcp_response.get('results', [])
-
 
 async def validate_answer_against_query( user_query: str, generated_answer: str) -> bool:
     """
     Validate if the generated answer matches the intent of the user's query using Pydantic AI.
     
     Args:
+        ctx: The context containing the Pydantic AI agent
         user_query: The original user query
         generated_answer: The answer generated by the system
         
@@ -460,95 +315,88 @@ async def validate_answer_against_query( user_query: str, generated_answer: str)
         result = await validation_agent.run(
             user_prompt=validation_prompt
         )
-        return str(result.data).lower().startswith('yes')
+        # logging.info(f"validation result: {result}")
+        return result.data
         
     except Exception as e:
         logging.error(f"Error validating answer: {e}")
         return False
 
 async def check_database_content():
-    # This function uses the direct Supabase client, as per your request to keep it for RAG.
-    try:
-        result = supabase.from_('site_pages').select('*').execute()
-        if len(result.data) > 0:
-            logging.info(f"Total documents in database (direct Supabase): {len(result.data)}; Sample document found")
-        else:
-            logging.info("No documents found in Supabase database (direct Supabase check).")
-    except Exception as e:
-        logging.error(f"Error checking database content directly via Supabase: {e}")
-        logging.warning("Ensure your Supabase is running and accessible from this script's environment.")
-
+    result = supabase.from_('site_pages').select('*').execute()
+    if len(result.data) > 0:
+        logging.info(f"Total documents in database: {len(result.data)}; Sample document found")
 
 def format_list_for_logging(items):
     return "\n" + pformat(items, indent=2)
 
 async def main():
-    logging.info("Starting main function with Mem0.ai MCP integration and direct Supabase RAG.")
+    logging.info("Starting main function")
 
-    # Initial check for database content (still using direct Supabase as per this version's setup)
     await check_database_content()
-
-    # Example of adding an initial memory
-    logging.info("Attempting to add an initial memory to Mem0.ai.")
-    await add_memory(None, "The user is interested in agentic RAG, Pydantic AI documentation, and using memory capabilities.", user_id=os.getenv('DEFAULT_USER_ID', 'default_rag_user'), session_id="initial_session")
+    # original_question = "what models are supported by PydanticAI?"
+    original_question = "get me the Weather Agent Example"
     
-    # Example of searching memories
-    logging.info("Attempting to search memories.")
-    search_results = await search_memory(None, "what is this conversation about?", user_id=os.getenv('DEFAULT_USER_ID', 'default_rag_user'), session_id="initial_session", limit=2)
-    logging.info(f"Search results from memory: {search_results}")
-    
-    original_question = "What models are supported by PydanticAI and can you also remember that I prefer short, direct answers?"
-    # You can change the question to test different tool usages:
-    # original_question = "Retrieve documentation about the 'Agent' class in PydanticAI."
-    # original_question = "List all memories you have for this session."
+    tool_instructions = """
+    You MUST use these tools in the following order:
+    1. retrieve_relevant_documentation
+    2. list_documentation_pages
+    3. get_page_content
 
+    Do not skip any steps. After using all tools, provide your final answer.
+    """
 
     for attempt in range(3):
         logging.info(f"Attempt {attempt + 1}")
         tool_tracker.tools_used = []
+            # Update the system prompt based on previous attempts
         updated_system_prompt = update_system_prompt(attempt)
         logging.info(f"system_prompt to be executed: {updated_system_prompt}")
+        deps = PydanticAIDeps(supabase=supabase,
+                            model=model,
+                            system_prompt=updated_system_prompt
+                            )
+        # Prepare the full prompt
+        # full_prompt = f"Question: {original_question}"
         
-        deps = PydanticAIDeps(
-            supabase=supabase, # Pass the direct Supabase client as dependency for direct Supabase RAG tools
-            model=model,
-            system_prompt=updated_system_prompt
-        )
-        
+        # # If it's not the first attempt, add a reminder about unused tools
+        # if attempt > 0:
+        #     unused_tools = tool_tracker.get_missing_tools()
+        #     if unused_tools:
+        #         tool_reminder = f"In your previous attempt, you didn't use these tools: {', '.join(unused_tools)}. Please ensure you use ALL tools in the correct order before providing an answer."
+        #         full_prompt = f"Question: {original_question} "
+
+        # Run the agent with the full prompt
         pydantic_ai_expert.model_settings = settings.ModelSettings(
             temperature=0.0,
-            parallel_tool_calls=False # Keep parallel_tool_calls to False for strict ordering logic
+            parallel_tool_calls=False
         )
-        
         logging.info(f"prompt to be executed: {original_question}")
         response = await pydantic_ai_expert.run(user_prompt=original_question, deps=deps)
-        
         logging.info(f"before validation answer: {response.data}")
-        
         # Check which tools were used
         unused_tools = tool_tracker.get_missing_tools()
         logging.info(f"Tools used in attempt {attempt + 1}: {tool_tracker.tools_used}")
         logging.info(f"Unused tools: {unused_tools}")
         logging.info(f"pydantic_ai_expert response: {response.data}")
-        
+        # Validate the answer
         validation_result = await validate_answer_against_query(
             user_query=original_question,
             generated_answer=str(response.data),
         )
 
-        if validation_result and len(unused_tools) < 1:
-            logging.info(f"Answer validated and all relevant tools used on attempt {attempt + 1}")
+        if str(validation_result).lower().startswith('yes') and len(unused_tools) < 1:
+            logging.info(f"Answer validated and all tools used on attempt {attempt + 1}")
             break
-        elif validation_result and len(unused_tools) > 0:
-            logging.warning("Answer validated but not all relevant tools were used. Retrying.")
+        elif str(validation_result).lower().startswith('yes') and len(unused_tools) > 0:
+            logging.warning("Answer validated but not all tools were used. Retrying.")
         else:
             logging.warning(f"Validation failed on attempt {attempt + 1},\n Reason: {validation_result}")
 
     else:
-        logging.error("Failed to get a valid answer after 3 attempts. Please try rephrasing your question.")
-        response.data = "Unable to generate a valid answer after multiple attempts. Please try rephrasing your question."
+        logging.error("Failed to get a valid answer using all tools after 3 attempts")
+        response.data = "Unable to generate a valid answer using all required tools after multiple attempts. Please try rephrasing your question."
 
     logging.info(f"Final Answer: {response.data}")
-
 if __name__ == "__main__":
     asyncio.run(main())
