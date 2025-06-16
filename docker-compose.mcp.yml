@@ -1,0 +1,18 @@
+name: mcp-servers
+
+services:
+  mem0-mcp-server:
+    container_name: rag-mem0-mcp-server
+    build:
+      context: ./mcp_servers/mem0-mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MEM0_API_KEY: ${MEM0_API_KEY}
+      DEFAULT_USER_ID: ${DEFAULT_USER_ID}
+      OLLAMA_BASE_URL: ${MEM0_OLLAMA_BASE_URL}
+      MEM0_SERVER_HOST: 10.0.0.5
+      MEM0_SERVER_PORT: ${MEM0_MCP_HOST_PORT}
+    ports:
+      # Expose to all network interfaces on the host (0.0.0.0)
+      - "0.0.0.0:${MEM0_MCP_HOST_PORT}:${MEM0_MCP_HOST_PORT}"
